@@ -1,0 +1,12 @@
+# Reglas para todos los robots de búsqueda
+User-agent: *
+Allow: /
+
+# Deshabilitar el rastreo de rutas de administración y privadas
+Disallow: /dashboard/
+Disallow: /vendedor/
+Disallow: /perfil/ # Asumiendo que el perfil del usuario es privado
+Disallow: /favoritos/ # Asumiendo que los favoritos son privados
+
+# Ubicación del Sitemap
+Sitemap: https://www.publimarket.com/sitemap.xml # Reemplazar con la URL real del sitio desplegado
