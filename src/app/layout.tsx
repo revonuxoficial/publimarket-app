@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css"; // Importa los estilos globales de TailwindCSS
+import Header from "@/components/Header"; // Importar el componente Header
+import Link from 'next/link'; // Importar Link
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "PubliMarket", // Título basado en el brief
   description: "Marketplace Local con Conversión Directa", // Descripción basada en el brief
+  manifest: "/manifest.json", // Enlace al manifest
 };
 
 export default function RootLayout({
@@ -17,30 +20,31 @@ export default function RootLayout({
   return (
     <>
       {/* Idioma en español según reglas */}
-      <html lang="es">
-        <body className={`flex flex-col min-h-screen ${inter.className}`} > {/* Flexbox para layout, min-h-screen para ocupar toda la altura */}
-          {/* Placeholder para el Header */}
-          <header className="bg-blue-600 text-white p-4">
-          <div className="container mx-auto">
-            {/* Aquí irá el contenido del Header (Logo, Navegación, Buscador) */}
-            <p>[Placeholder para Header]</p>
-          </div>
-        </header>
+      <html lang="es" className="h-full">
+        <body className={`${inter.className} flex flex-col min-h-screen bg-slate-50 text-slate-800 antialiased`}>
+          <Header /> {/* Usar el componente Header */}
 
-        {/* Contenido principal de la aplicación */}
-        <main className="flex-grow container mx-auto p-4"> {/* flex-grow para ocupar espacio disponible, container y mx-auto para centrar y limitar ancho */}
-          {children}
-        </main>
+          {/* Contenido principal de la aplicación */}
+          {/* Se quitaron 'container' y 'mx-auto' para permitir secciones full-width */}
+          {/* Eliminar padding horizontal para que el contenido pueda ser full-width */}
+          <main className="flex-grow py-8">
+            {children}
+          </main>
 
-        {/* Placeholder para el Footer */}
-        <footer className="bg-gray-800 text-white p-4 mt-auto"> {/* mt-auto para empujar el footer al final */}
-          <div className="container mx-auto text-center">
-            {/* Aquí irá el contenido del Footer (Links, Info de Contacto, Copyright) */}
-            <p>[Placeholder para Footer]</p>
-          </div>
-        </footer>
-      </body>
-    </html>
+          {/* Footer estilizado */}
+          <footer className="bg-slate-900 text-slate-300 py-8 mt-auto">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <nav className="flex justify-center space-x-4 mb-4">
+                <Link href="/sobre-nosotros" className="hover:text-sky-400 transition-colors">Sobre Nosotros</Link>
+                <Link href="/contacto" className="hover:text-sky-400 transition-colors">Contacto</Link>
+                <Link href="/terminos" className="hover:text-sky-400 transition-colors">Términos y Condiciones</Link>
+                <Link href="/privacidad" className="hover:text-sky-400 transition-colors">Política de Privacidad</Link>
+              </nav>
+              <p>&copy; {new Date().getFullYear()} PubliMarket. Todos los derechos reservados.</p>
+            </div>
+          </footer>
+        </body>
+      </html>
     </>
   );
 }

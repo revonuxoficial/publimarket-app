@@ -1,12 +1,18 @@
-# Reglas para todos los robots de búsqueda
+# robots.txt para PubliMarket
+
 User-agent: *
 Allow: /
 
-# Deshabilitar el rastreo de rutas de administración y privadas
+# Rutas que los crawlers no deberían intentar indexar
+Disallow: /auth/
+Disallow: /admin/
 Disallow: /dashboard/
-Disallow: /vendedor/
-Disallow: /perfil/ # Asumiendo que el perfil del usuario es privado
-Disallow: /favoritos/ # Asumiendo que los favoritos son privados
+Disallow: /perfil/
+Disallow: /favoritos/
+# También se podrían añadir rutas específicas de API si no deben ser descubiertas,
+# aunque normalmente no se enlazan directamente.
 
-# Ubicación del Sitemap
-Sitemap: https://www.publimarket.com/sitemap.xml # Reemplazar con la URL real del sitio desplegado
+# Sitemap
+Sitemap: http://localhost:3000/sitemap.xml
+# Reemplazar con la URL de producción cuando esté disponible:
+# Sitemap: https://www.publimarket.com/sitemap.xml

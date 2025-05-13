@@ -69,6 +69,7 @@ export async function updateVendorProfile(formData: FormData): Promise<{ success
   const social_links = formData.get('social_links') as string | null; // Podría ser un JSON stringificado
   const opening_hours = formData.get('opening_hours') as string | null; // Podría ser un JSON stringificado
   const location = formData.get('location') as string | null;
+  const city = formData.get('city') as string | null; // Obtener ciudad
   const logoFile = formData.get('logo') as File | null; // Archivo del nuevo logo
   const currentLogoUrl = formData.get('currentLogoUrl') as string | null; // URL del logo actual (para saber si se eliminó)
 
@@ -134,6 +135,7 @@ export async function updateVendorProfile(formData: FormData): Promise<{ success
       social_links: social_links ? JSON.parse(social_links) : null, // Parsear JSON si se envía como string
       opening_hours: opening_hours ? JSON.parse(opening_hours) : null, // Parsear JSON si se envía como string
       location: location,
+      city: city, // Añadir ciudad a la actualización
       logo_url: logo_url,
       // updated_at se puede configurar para que se genere automáticamente en Supabase
     })

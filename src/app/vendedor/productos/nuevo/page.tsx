@@ -1,11 +1,11 @@
-import { createClient } from '@/lib/supabase'; // Cliente de Supabase del lado del servidor
+import { createServerSupabaseClient, type SupabaseClient, type Database } from '@/lib/supabase'; // Importar el cliente correcto y tipos
 import { redirect } from 'next/navigation'; // Para redirigir
 import React from 'react';
 import NewProductForm from '@/components/NewProductForm'; // Importar el Client Component del formulario
 
 // Función auxiliar para verificar si el usuario es un vendedor PRO (duplicada para Server Component)
 // En una aplicación real, esta lógica podría centralizarse o manejarse de otra forma
-async function checkProVendorServer(supabase: ReturnType<typeof createClient>) {
+async function checkProVendorServer(supabase: ReturnType<typeof createServerSupabaseClient>) { // Dejar que TS infiera o usar ReturnType
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
@@ -30,7 +30,7 @@ async function checkProVendorServer(supabase: ReturnType<typeof createClient>) {
 
 
 export default async function NuevoProductoPage() {
-  const supabase = createClient(); // Crear instancia del cliente del lado del servidor
+  const supabase = createServerSupabaseClient(); // Usar la función correcta para crear el cliente
 
   // Verificar si el usuario es un vendedor PRO
   const user = await checkProVendorServer(supabase);

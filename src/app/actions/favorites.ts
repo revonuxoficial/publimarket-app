@@ -2,126 +2,126 @@
 
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { Database } from '@/lib/supabase'; // Asumiendo que este es el tipo de la DB
-import { revalidatePath } from 'next/cache'; // Para revalidar la caché si es necesario
+import { Database } from '@/lib/supabase';
+import { revalidatePath } from 'next/cache';
 
-// Definir un tipo básico para un favorito (SOLUCIÓN TEMPORAL)
-// La forma recomendada es usar los tipos generados por la CLI
-interface Favorite {
-  user_id: string;
-  product_id: string | null;
-  vendor_id: string | null;
-  created_at: string;
-}
+// Asumimos que existe una tabla 'user_favorites' con columnas:
+// id (uuid, pk), user_id (uuid, fk to auth.users), product_id (uuid, fk to products), created_at (timestamptz)
+// y una restricción UNIQUE en (user_id, product_id)
 
-// Server Action para añadir un favorito (producto o vendedor)
-export async function addFavorite({ product_id, vendor_id }: { product_id?: string; vendor_id?: string }) {
+/**
+ * Añade un producto a los favoritos del usuario autenticado.
+ */
+export async function addFavorite(productId: string): Promise<{ success: boolean; error?: string }> {
   const supabase = createServerActionClient<Database>({ cookies });
-
-  // Obtener el usuario autenticado
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Si no hay usuario autenticado, retornar un error
   if (!user) {
-    return { success: false, error: 'Usuario no autenticado' };
+    return { success: false, error: 'Usuario no autenticado.' };
   }
 
-  // Validar que se proporciona un product_id o un vendor_id
-  if (!product_id && !vendor_id) {
-    return { success: false, error: 'Se requiere product_id o vendor_id' };
+  const { error } = await supabase
+    .from('user_favorites')
+    .insert({ user_id: user.id, product_id: productId });
+
+  if (error) {
+    // Manejar el caso de violación de unicidad (producto ya es favorito) como no fatal
+    if (error.code === '23505') { // Código de error para violación de unicidad en PostgreSQL
+      // console.warn('Intento de añadir favorito duplicado:', error.message);
+      return { success: true }; // Considerarlo éxito si ya era favorito
+    }
+    console.error('Error adding favorite:', error);
+    return { success: false, error: error.message };
   }
 
-  // Verificar si el favorito ya existe para evitar duplicados
-  const { data: existingFavorite, error: checkError } = await supabase
-    .from('favorites')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .or(`product_id.eq.${product_id},vendor_id.eq.${vendor_id}`)
-    .single();
-
-  if (checkError && checkError.code !== 'PGRST116') { // PGRST116 significa "no rows found"
-      console.error('Error al verificar favorito existente:', checkError);
-      return { success: false, error: checkError.message };
-  }
-
-  if (existingFavorite) {
-      return { success: false, error: 'El favorito ya existe' };
-  }
-
-
-  // Insertar el nuevo favorito en la tabla 'favorites'
-  const { error: insertError } = await supabase
-    .from('favorites')
-    .insert({ user_id: user.id, product_id: product_id || null, vendor_id: vendor_id || null });
-
-  if (insertError) {
-    console.error('Error al añadir favorito:', insertError);
-    return { success: false, error: insertError.message };
-  }
-
-  revalidatePath('/favoritos');
+  // Opcional: Revalidar rutas donde se muestre el estado de favorito
+  // revalidatePath('/producto/[slug]', 'layout'); // Revalida todas las páginas de producto
+  // revalidatePath('/productos');
+  // revalidatePath('/favoritos');
 
   return { success: true };
 }
 
-// Server Action para eliminar un favorito (producto o vendedor)
-export async function removeFavorite({ product_id, vendor_id }: { product_id?: string; vendor_id?: string }) {
+/**
+ * Elimina un producto de los favoritos del usuario autenticado.
+ */
+export async function removeFavorite(productId: string): Promise<{ success: boolean; error?: string }> {
   const supabase = createServerActionClient<Database>({ cookies });
-
-  // Obtener el usuario autenticado
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Si no hay usuario autenticado, retornar un error
   if (!user) {
-    return { success: false, error: 'Usuario no autenticado' };
+    return { success: false, error: 'Usuario no autenticado.' };
   }
 
-  // Validar que se proporciona un product_id o un vendor_id
-  if (!product_id && !vendor_id) {
-    return { success: false, error: 'Se requiere product_id o vendor_id' };
-  }
-
-  // Eliminar el favorito de la tabla 'favorites'
-  // Asegurarse de que la RLS en Supabase permita esta operación solo para el propio usuario
-  const { error: deleteError } = await supabase
-    .from('favorites')
+  const { error } = await supabase
+    .from('user_favorites')
     .delete()
-    .eq('user_id', user.id) // Asegurar que solo se elimina el favorito del usuario autenticado
-    .or(`product_id.eq.${product_id},vendor_id.eq.${vendor_id}`); // Eliminar el favorito específico
+    .eq('user_id', user.id)
+    .eq('product_id', productId);
 
-  if (deleteError) {
-    console.error('Error al eliminar favorito:', deleteError);
-    return { success: false, error: deleteError.message };
+  if (error) {
+    console.error('Error removing favorite:', error);
+    return { success: false, error: error.message };
   }
 
-  revalidatePath('/favoritos');
+  // Opcional: Revalidar rutas
+  // revalidatePath('/producto/[slug]', 'layout');
+  // revalidatePath('/productos');
+  // revalidatePath('/favoritos');
 
   return { success: true };
 }
 
-// Server Action para obtener la lista de favoritos del usuario autenticado
-export async function getFavorites(): Promise<{ data: Favorite[] | null; error: string | null }> {
+/**
+ * Verifica si un producto está en los favoritos del usuario autenticado.
+ * @param productId El ID del producto a verificar.
+ * @returns Un objeto con `isFavorite: boolean` y opcionalmente `error`.
+ */
+export async function getFavoriteStatus(productId: string): Promise<{ isFavorite: boolean; error?: string }> {
   const supabase = createServerActionClient<Database>({ cookies });
-
-  // Obtener el usuario autenticado
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Si no hay usuario autenticado, retornar un error y datos nulos
   if (!user) {
-    return { data: null, error: 'Usuario no autenticado' };
+    // Si el usuario no está autenticado, el producto no puede ser favorito para él.
+    return { isFavorite: false }; 
   }
 
-  // Obtener la lista de favoritos para el usuario autenticado
-  // Asegurarse de que la RLS en Supabase permita esta operación solo para el propio usuario
-  const { data: favorites, error: fetchError } = await supabase
-    .from('favorites')
-    .select('*') // Seleccionar todos los campos del favorito
-    .eq('user_id', user.id); // Filtrar por el ID del usuario autenticado
+  const { data, error } = await supabase
+    .from('user_favorites')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('product_id', productId)
+    .maybeSingle(); // Usar maybeSingle para que no sea error si no se encuentra
 
-  if (fetchError) {
-    console.error('Error al obtener favoritos:', fetchError);
-    return { data: null, error: fetchError.message };
+  if (error) {
+    console.error('Error fetching favorite status:', error);
+    return { isFavorite: false, error: error.message };
   }
 
-  return { data: favorites, error: null };
+  return { isFavorite: !!data }; // True si data no es null (es decir, se encontró el favorito)
+}
+
+/**
+ * Obtiene todos los IDs de productos favoritos del usuario autenticado.
+ * @returns Una promesa que resuelve con un array de IDs de productos o un error.
+ */
+export async function getUserFavoriteProductIds(): Promise<{ productIds?: string[]; error?: string }> {
+  const supabase = createServerActionClient<Database>({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: 'Usuario no autenticado.' };
+  }
+
+  const { data, error } = await supabase
+    .from('user_favorites')
+    .select('product_id')
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('Error fetching user favorite product IDs:', error);
+    return { error: error.message };
+  }
+
+  return { productIds: data?.map(fav => fav.product_id) || [] };
 }

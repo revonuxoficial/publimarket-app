@@ -20,6 +20,9 @@ export default function VendorProfileForm({ initialData }: VendorProfileFormProp
     social_links: '', // JSON stringificado o string simple por ahora
     opening_hours: '', // JSON stringificado o string simple por ahora
     location: '',
+    city: '', // Nuevo campo para la ciudad
+    latitude: '', // Nuevo campo para latitud
+    longitude: '', // Nuevo campo para longitud
     currentLogoUrl: '', // Para manejar la URL del logo actual
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -39,6 +42,9 @@ export default function VendorProfileForm({ initialData }: VendorProfileFormProp
         social_links: initialData.social_links ? JSON.stringify(initialData.social_links) : '', // Convertir JSONB a string
         opening_hours: initialData.opening_hours ? JSON.stringify(initialData.opening_hours) : '', // Convertir JSONB a string
         location: initialData.location || '',
+        city: initialData.city || '', // Cargar ciudad
+        latitude: initialData.latitude !== undefined && initialData.latitude !== null ? String(initialData.latitude) : '',
+        longitude: initialData.longitude !== undefined && initialData.longitude !== null ? String(initialData.longitude) : '',
         currentLogoUrl: initialData.logo_url || '',
       });
     }
@@ -74,6 +80,9 @@ export default function VendorProfileForm({ initialData }: VendorProfileFormProp
     }
     if (!formData.whatsapp_number) {
       newErrors.whatsapp_number = 'El número de WhatsApp es obligatorio.';
+    }
+    if (!formData.city) { // Validación para ciudad
+      newErrors.city = 'La ciudad es obligatoria.';
     }
     // Validación básica de formato JSON para social_links y opening_hours
     if (formData.social_links) {
@@ -115,7 +124,10 @@ export default function VendorProfileForm({ initialData }: VendorProfileFormProp
     data.append('social_links', formData.social_links);
     data.append('opening_hours', formData.opening_hours);
     data.append('location', formData.location);
+    data.append('city', formData.city); // Enviar ciudad
     data.append('currentLogoUrl', formData.currentLogoUrl); // Enviar URL actual para lógica de eliminación
+    data.append('latitude', formData.latitude);
+    data.append('longitude', formData.longitude);
 
     if (logoFile) {
       data.append('logo', logoFile);
@@ -155,6 +167,7 @@ export default function VendorProfileForm({ initialData }: VendorProfileFormProp
       data.append('social_links', formData.social_links);
       data.append('opening_hours', formData.opening_hours);
       data.append('location', formData.location);
+      data.append('city', formData.city); // Añadir ciudad también aquí
 
 
       const result = await updateVendorProfile(data);
@@ -298,6 +311,56 @@ export default function VendorProfileForm({ initialData }: VendorProfileFormProp
             onChange={handleChange}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
           />
+        </div>
+
+        <div>
+          <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+            Ciudad
+          </label>
+          <input
+            type="text"
+            id="city"
+            name="city"
+            value={formData.city}
+            onChange={handleChange}
+            required
+            className={`mt-1 block w-full px-3 py-2 border ${errors.city ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+          />
+          {errors.city && <p className="mt-2 text-sm text-red-600">{errors.city}</p>}
+        </div>
+
+        {/* Campos de geolocalización */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="latitude" className="block text-sm font-medium text-gray-700">
+              Latitud <span className="text-gray-400 text-xs">(opcional)</span>
+            </label>
+            <input
+              type="number"
+              step="any"
+              id="latitude"
+              name="latitude"
+              value={formData.latitude}
+              onChange={handleChange}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              placeholder="-34.6037"
+            />
+          </div>
+          <div>
+            <label htmlFor="longitude" className="block text-sm font-medium text-gray-700">
+              Longitud <span className="text-gray-400 text-xs">(opcional)</span>
+            </label>
+            <input
+              type="number"
+              step="any"
+              id="longitude"
+              name="longitude"
+              value={formData.longitude}
+              onChange={handleChange}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              placeholder="-58.3816"
+            />
+          </div>
         </div>
 
         {/* Campo para Subir Logo */}

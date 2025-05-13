@@ -5,58 +5,89 @@ import { cookies } from 'next/headers';
 import { Database } from '@/lib/supabase'; // Importar tipos de Supabase
 import { checkProVendor } from '@/app/actions/utils'; // Importar la función de utilidad centralizada
 
-// Definición básica del tipo para las estadísticas (si la tabla analytics existe)
-// La forma recomendada es generar este tipo con la CLI de Supabase
-export interface VendorAnalytics {
-  totalViews: number;
-  whatsappClicks: number;
+export interface VendorAnalyticsData {
+  totalProducts: number;
+  activeProducts: number;
+  totalProductViews: number;
+  // whatsappClicks: number; // Mantener si la tabla 'analytics' se usa para esto
 }
 
+export interface GetVendorAnalyticsResult {
+  data?: VendorAnalyticsData;
+  error?: string;
+}
 
 /**
- * Obtiene las estadísticas básicas (visitas a tienda, clics en WhatsApp) del vendedor autenticado.
- * Asume la existencia de una tabla 'analytics' con 'vendor_id' y 'event_type'.
- * @returns Una promesa que resuelve con un objeto VendorAnalytics o null si no es vendedor PRO o hay un error.
+ * Obtiene estadísticas del vendedor: total de productos, productos activos, y vistas totales de productos.
+ * @returns Una promesa que resuelve con las estadísticas o un error.
  */
-export async function getVendorAnalytics(): Promise<VendorAnalytics | null> {
-  // Verificar si el usuario es un vendedor PRO y obtener su ID de vendedor
-  const authCheck = await checkProVendor();
+export async function getVendorAnalytics(): Promise<GetVendorAnalyticsResult> {
+  const authCheck = await checkProVendor(); // Asegura que es un pro_vendor y obtiene vendorId
   const vendorId = authCheck.vendorId;
 
   const supabase = createServerActionClient<Database>({ cookies });
 
   try {
-    // Contar visitas a la tienda
-    const { count: totalViews, error: viewsError } = await supabase
-      .from('analytics')
-      .select('*', { count: 'exact', head: true }) // Contar filas sin traer datos
-      .eq('vendor_id', vendorId)
-      .eq('event_type', 'view');
+    // 1. Contar total de productos
+    const { count: totalProducts, error: totalProductsError } = await supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('vendor_id', vendorId);
 
-    if (viewsError) {
-      console.error('Error fetching vendor views:', viewsError);
-      return null;
+    if (totalProductsError) {
+      console.error('Error fetching total products count:', totalProductsError);
+      return { error: totalProductsError.message };
     }
 
-    // Contar clics en WhatsApp
-    const { count: whatsappClicks, error: clicksError } = await supabase
-      .from('analytics')
-      .select('*', { count: 'exact', head: true }) // Contar filas sin traer datos
+    // 2. Contar productos activos
+    const { count: activeProducts, error: activeProductsError } = await supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
       .eq('vendor_id', vendorId)
-      .eq('event_type', 'whatsapp_click');
+      .eq('is_active', true);
 
-    if (clicksError) {
-      console.error('Error fetching whatsapp clicks:', clicksError);
-      return null;
+    if (activeProductsError) {
+      console.error('Error fetching active products count:', activeProductsError);
+      return { error: activeProductsError.message };
     }
+
+    // 3. Sumar vistas de productos (asumiendo columna 'view_count' en 'products')
+    // Esta es una forma de hacerlo, pero SUM() sobre una columna puede ser más eficiente si Supabase lo permite así.
+    // La API de JS de Supabase no tiene un agregador SUM directo en el select, se haría con .rpc() o una vista.
+    // Alternativa: obtener todos los view_counts y sumarlos en JS (menos eficiente para muchos productos).
+    const { data: productViewsData, error: productViewsError } = await supabase
+      .from('products')
+      .select('view_count')
+      .eq('vendor_id', vendorId);
+
+    if (productViewsError) {
+      console.error('Error fetching product views:', productViewsError);
+      return { error: productViewsError.message };
+    }
+
+    const totalProductViews = productViewsData?.reduce((sum, product) => sum + (product.view_count || 0), 0) || 0;
+    
+    // 4. WhatsApp Clicks (si se mantiene la tabla 'analytics')
+    // const { count: whatsappClicks, error: clicksError } = await supabase
+    //   .from('analytics')
+    //   .select('*', { count: 'exact', head: true })
+    //   .eq('vendor_id', vendorId)
+    //   .eq('event_type', 'whatsapp_click');
+    // if (clicksError) {
+    //   console.warn('Error fetching whatsapp clicks:', clicksError.message); // No hacer fatal
+    // }
 
     return {
-      totalViews: totalViews || 0, // Usar 0 si el conteo es null
-      whatsappClicks: whatsappClicks || 0, // Usar 0 si el conteo es null
+      data: {
+        totalProducts: totalProducts || 0,
+        activeProducts: activeProducts || 0,
+        totalProductViews: totalProductViews,
+        // whatsappClicks: whatsappClicks || 0,
+      },
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error fetching vendor analytics:', error);
-    return null;
+    return { error: error.message || 'Error inesperado.' };
   }
 }

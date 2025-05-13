@@ -19,21 +19,30 @@ export default async function DashboardLayout({
         <nav>
           <ul className="space-y-1">
             <li>
-              <Link href="/dashboard/productos" className="block py-2 px-4 rounded hover:bg-gray-700">
+              <Link href="/dashboard/vendedor/productos" className="block py-2 px-4 rounded hover:bg-gray-700">
                 Productos
               </Link>
             </li>
             <li>
-              <Link href="/dashboard/settings/store" className="block py-2 px-4 rounded hover:bg-gray-700">
+              <Link href="/dashboard/vendedor/mitienda" className="block py-2 px-4 rounded hover:bg-gray-700">
                 Mi Tienda
               </Link>
             </li>
             <li>
-              <Link href="/dashboard/anuncios" className="block py-2 px-4 rounded hover:bg-gray-700">
+              <Link href="/dashboard/vendedor/anuncios" className="block py-2 px-4 rounded hover:bg-gray-700">
                 Anuncios
               </Link>
             </li>
-            {/* Puedes añadir más enlaces aquí según las secciones del dashboard */}
+            <li>
+              <Link href="/dashboard/vendedor/suscripcion" className="block py-2 px-4 rounded hover:bg-gray-700">
+                Suscripción PRO
+              </Link>
+            </li>
+            <li>
+              <Link href="/dashboard/vendedor" className="block py-2 px-4 rounded hover:bg-gray-700 mt-4 border-t border-gray-700 pt-2">
+                Panel Principal
+              </Link>
+            </li>
           </ul>
         </nav>
       </aside>

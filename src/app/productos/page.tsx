@@ -1,41 +1,68 @@
-import { getProducts, type Product } from '@/app/actions/public'; // Importar el tipo Product
+import { getProducts, getUniqueCategories, getUniqueCities, Product } from '@/app/actions/public'; // Asegurar que Product esté importado
 import ProductCard from '@/components/ProductCard';
 import { Suspense } from 'react';
-import { createClient } from '@/lib/supabaseClient'; // Cliente de Supabase del lado del cliente
-import { createServerActionClient } from '@supabase/auth-helpers-nextjs'; // Cliente de Server Action
-import { cookies } from 'next/headers'; // Para acceder a las cookies
-import { Database } from '@/lib/supabase'; // Importar tipos de Supabase
-import Link from 'next/link'; // Importar Link para los enlaces de paginación
-import ErrorMessage from '@/components/ErrorMessage'; // Importar componente de error
+import ProductFiltersForm from './ProductFiltersForm'; // Importar el nuevo componente
+import PaginationControls from '@/components/PaginationControls'; // Importar PaginationControls
+import Link from 'next/link';
+import ErrorMessage from '@/components/ErrorMessage';
+import LoadingSpinner from '@/components/LoadingSpinner';
+// cookies ya no se importa directamente, createServerSupabaseClient lo maneja.
+import { createServerSupabaseClient, type Database } from '@/lib/supabase'; // Usar el cliente de @supabase/ssr
+import { getUserFavoriteProductIds } from '@/app/actions/favorites';
 
-// Definir el tipo para los parámetros de búsqueda
+// Íconos para paginación y filtros
+const ChevronLeftIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+  </svg>
+);
+const ChevronRightIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+  </svg>
+);
+// FilterIcon ya no es necesario aquí, está en ProductFiltersForm
+
+
 interface ProductosPageProps {
-  searchParams?: {
+  searchParams: {
     query?: string;
     city?: string;
     category?: string;
     page?: string;
+    sort?: string; // Nuevo searchParam para ordenamiento
+    onlyProVendors?: string; // Añadido para filtro PRO
   };
 }
 
-// Componente para mostrar la lista de productos
 async function ProductsList({
   query,
   currentPage,
   city,
   category,
+  sortBy,
+  userId,
+  favoriteProductIds,
+  onlyProVendors, // Nuevo prop
 }: {
   query: string;
   currentPage: number;
   city?: string;
   category?: string;
+  sortBy?: string;
+  userId?: string;
+  favoriteProductIds?: string[];
+  onlyProVendors?: boolean;
 }) {
-  const { data: products, error } = await getProducts({
+  const pageSize = 12;
+  const { data: products, error, totalCount } = await getProducts({
     query,
     page: currentPage,
-    pageSize: 10,
+    pageSize,
     city,
     category,
+    sortBy,
+    onlyProVendors, // Pasar a getProducts
   });
 
   if (error) {
@@ -44,76 +71,118 @@ async function ProductsList({
   }
 
   if (!products || products.length === 0) {
-    return <p className="col-span-full text-center text-gray-500">No se encontraron productos.</p>;
+    return (
+      <div className="col-span-full text-center py-12">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mx-auto text-slate-400 mb-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
+        <p className="text-xl text-slate-600">No se encontraron productos que coincidan con tu búsqueda.</p>
+        <p className="text-slate-500 mt-2">Intentá con otros términos o filtros.</p>
+      </div>
+    );
   }
-
-  // Obtener el usuario autenticado para verificar si es vendedor PRO (para mostrar botón de añadir a favoritos)
-  const supabase = createServerActionClient<Database>({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
+  
+  // Asumimos que getProducts ahora también devuelve vendorSlug y vendorName en el objeto product
+  // Si no, ProductCard usará placeholders o lógica interna para manejarlos.
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
-      {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
-      ))}
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-8">
+      {products.map((product) => {
+        const isFavorite = favoriteProductIds?.includes(product.id) ?? false;
+        return (
+          <ProductCard
+            key={product.id}
+            product={product}
+            userId={userId}
+            isFavorite={isFavorite}
+          />
+        );
+      })}
     </div>
   );
 }
 
-export default async function ProductsPage(props: ProductosPageProps) {
-  const searchParams = props.searchParams;
-  const query = searchParams?.query || '';
-  const currentPage = Number(searchParams?.page) || 1;
-  const city = searchParams?.city;
-  const category = searchParams?.category;
+export default async function ProductsPage({ searchParams }: ProductosPageProps) {
+  const query = searchParams.query || '';
+  const currentPage = Number(searchParams.page) || 1;
+  const city = searchParams.city;
+  const category = searchParams.category;
+  const sortBy = searchParams.sort || 'date_desc'; // Valor por defecto para sortBy
+  const onlyProVendors = searchParams.onlyProVendors === 'true';
+
+  // Crear cliente Supabase para Server Component usando la función unificada
+  const supabase = createServerSupabaseClient(); 
+  const { data: { user } } = await supabase.auth.getUser();
+  const userId = user?.id;
+
+  let favoriteProductIds: string[] = [];
+  if (userId) {
+    const favsResult = await getUserFavoriteProductIds();
+    if (favsResult.productIds) {
+      favoriteProductIds = favsResult.productIds;
+    }
+  }
+
+  // Obtener listas para los selectores
+  const uniqueCategories = await getUniqueCategories();
+  const uniqueCities = await getUniqueCities();
+
+  // Para la paginación, necesitamos el conteo total de productos con los filtros aplicados.
+  // Importante: pasar sortBy también a esta llamada si afecta el conteo (aunque no debería para `totalCount`)
+  // Sin embargo, getProducts no usa sortBy para el countQuery, así que está bien.
+  const { totalCount: rawTotalCount } = await getProducts({ query, city, category, sortBy, pageSize: 1, page: 1 });
+  const totalCount = rawTotalCount ?? 0; // Si es null, tratar como 0
+  const totalPages = Math.ceil(totalCount / 12); // Asumiendo pageSize = 12
 
   return (
-    <>
-      <div className="container mx-auto">
-        <h1 className="text-2xl font-bold text-center my-6">Explorar Productos</h1>
-        <form method="GET" className="p-4 bg-gray-100 flex flex-col sm:flex-row gap-4">
-          <input
-            type="text"
-            name="query"
-            placeholder="Buscar productos..."
-            defaultValue={query}
-            className="p-2 border rounded flex-grow"
+    <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <header className="mb-10 text-center">
+        <h1 className="text-4xl font-extrabold text-slate-800 sm:text-5xl">
+          Explorá Nuestros Productos
+        </h1>
+        <p className="mt-3 text-lg text-slate-600 max-w-2xl mx-auto">
+          Encontrá exactamente lo que buscás utilizando nuestros filtros.
+        </p>
+      </header>
+
+      <ProductFiltersForm
+        initialQuery={query}
+        initialCity={city}
+        initialCategory={category}
+        initialSortBy={sortBy}
+        uniqueCategories={uniqueCategories}
+        uniqueCities={uniqueCities}
+      />
+
+      <Suspense fallback={<LoadingSpinner />}>
+        <ProductsList
+          query={query}
+          currentPage={currentPage}
+          city={city}
+          category={category}
+          sortBy={sortBy}
+          userId={userId}
+          favoriteProductIds={favoriteProductIds}
+          onlyProVendors={onlyProVendors}
+        />
+      </Suspense>
+
+      {/* Paginación: Usar el componente PaginationControls */}
+      {totalCount > 0 && totalPages > 1 && (
+        <div className="mt-12">
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            baseUrl="/productos"
+            searchParams={{ query, city, category, sort: sortBy }}
           />
-          <input
-            type="text"
-            name="city"
-            placeholder="Filtrar por ciudad..."
-            defaultValue={city}
-            className="p-2 border rounded"
-          />
-          <input
-            type="text"
-            name="category"
-            placeholder="Filtrar por categoría..."
-            defaultValue={category}
-            className="p-2 border rounded"
-          />
-          <button type="submit" className="p-2 bg-blue-500 text-white rounded">Buscar y Filtrar</button>
-        </form>
-        <Suspense fallback={<div className="text-center p-4">Cargando productos...</div>}>
-          <ProductsList query={query} currentPage={currentPage} city={city} category={category} />
-        </Suspense>
-        <div className="flex justify-center gap-4 p-4">
-          <Link
-            href={`/productos?query=${query}&city=${city || ''}&category=${category || ''}&page=${Math.max(1, currentPage - 1)}`}
-            className={`p-2 border rounded ${currentPage <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            Anterior
-          </Link>
-          <span className="p-2">Página {currentPage}</span>
-          <Link
-            href={`/productos?query=${query}&city=${city || ''}&category=${category || ''}&page=${currentPage + 1}`}
-            className="p-2 border rounded"
-          >
-            Siguiente
-          </Link>
         </div>
-      </div>
-    </>
+      )}
+      {totalCount === 0 && query && (
+         <div className="text-center py-10">
+           <p className="text-lg text-slate-500">No se encontraron productos para "{query}".</p>
+         </div>
+      )}
+    </div>
   );
 }

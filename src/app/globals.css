@@ -5,12 +5,7 @@
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* Eliminar regla @theme desconocida */
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -23,4 +18,50 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Definiciones de Keyframes para animaciones (mantener por si se usan directamente, aunque el hook usa transiciones) */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -20px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Aplicar transiciones para el hook useScrollAnimation */
+.scroll-animate,
+.animate-fadeInUp,
+.animate-fadeInDown {
+  opacity: 0;
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+/* Definir transformaciones iniciales basadas en la clase de animación */
+.animate-fadeInUp {
+  transform: translate3d(0, 20px, 0);
+}
+
+.animate-fadeInDown {
+  transform: translate3d(0, -20px, 0);
+}
+
+/* Estado final cuando el elemento es visible */
+.is-visible {
+  opacity: 1;
+  transform: none;
 }

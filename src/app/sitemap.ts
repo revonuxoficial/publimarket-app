@@ -22,9 +22,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = [
     '/',
     '/productos',
-    // '/favoritos', // Excluido según robots.txt (privado)
     '/auth',
-    // '/perfil', // Excluido según robots.txt (privado)
+    '/sobre-nosotros',
+    '/contacto',
+    '/terminos',
+    '/privacidad',
+    // '/favoritos', y '/perfil' son usualmente noindex, así que está bien excluirlos
   ];
 
   const staticUrls: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
@@ -37,7 +40,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // URLs dinámicas para vendedores (tiendas)
   const { data: vendors, error: vendorsError } = await supabase
     .from('vendors')
-    .select('slug, updated_at');
+    .select('slug, updated_at')
+    .eq('status', 'active'); // Asumiendo que 'active' es el estado para vendedores visibles
 
   if (vendorsError) {
     console.error('Error fetching vendors for sitemap:', vendorsError);
@@ -56,7 +60,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // La ruta de producto es /producto/[slug] según la estructura de carpetas
   const { data: products, error: productsError } = await supabase
     .from('products')
-    .select('slug, updated_at'); // Asumiendo que la tabla products tiene 'slug' y 'updated_at'
+    .select('slug, updated_at')
+    .eq('is_active', true); // Solo productos activos
 
   if (productsError) {
     console.error('Error fetching products for sitemap:', productsError);
@@ -71,5 +76,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }))
     : [];
 
-  return [...staticUrls, ...vendorUrls, ...productUrls];
+  // URLs para páginas de categorías (virtuales, usando query params)
+  const { data: categories, error: categoriesError } = await supabase
+    .from('categories')
+    .select('name, updated_at'); // Asumiendo 'name' para el query param y 'updated_at' para lastModified
+
+  if (categoriesError) {
+    console.error('Error fetching categories for sitemap:', categoriesError);
+  }
+
+  const categoryUrls: MetadataRoute.Sitemap = categories
+    ? categories.map((category) => ({
+        url: `${BASE_URL}/productos?category=${encodeURIComponent(category.name)}`,
+        lastModified: new Date(category.updated_at || new Date()).toISOString(), // Usar fecha actual si updated_at no existe
+        changeFrequency: 'weekly',
+        priority: 0.7, 
+      }))
+    : [];
+
+  return [...staticUrls, ...vendorUrls, ...productUrls, ...categoryUrls];
 }

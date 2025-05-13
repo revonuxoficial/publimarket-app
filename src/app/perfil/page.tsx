@@ -1,84 +1,86 @@
-import { createServerActionClient } from '@supabase/auth-helpers-nextjs'; // Importar cliente de Server Action
-import { cookies } from 'next/headers'; // Importar cookies
-import { redirect } from 'next/navigation'; // Para redirigir
-import React from 'react';
-import { Database } from '@/lib/supabase'; // Importar tipos de Supabase
-import ErrorMessage from '@/components/ErrorMessage'; // Importar componente de error
+'use client';
 
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+// @ts-ignore: Cannot find module 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react';
 
-// Definir un tipo básico para el usuario de Supabase (SOLUCIÓN TEMPORAL)
-// La forma recomendada es usar los tipos generados por la CLI
-interface SupabaseUser {
-  email: string | undefined;
-  id: string; // Añadir id ya que se usa para filtrar
-  // Añadir otras propiedades del usuario si son necesarias
-}
+export default function ProfilePage() {
+  const { data: session } = useSession();
+  const [userData, setUserData] = useState<any>(null);
 
-// Definir un tipo básico para los datos del perfil (SOLUCIÓN TEMPORAL)
-// La forma recomendada es usar los tipos generados por la CLI
-interface UserProfile {
-  email: string;
-  role: string; // Asumiendo que el rol está en la tabla users
-  // Añadir otros campos del perfil si existen en la tabla users
-}
+  useEffect(() => {
+    // Supongamos que desde alguna API interna obtenemos datos extendidos del usuario.
+    async function fetchUserData() {
+      if (session && session.user) {
+        // Simulemos una llamada a una API interna que retorna datos del perfil
+        const response = await fetch('/api/profile');
+        if (response.ok) {
+          const data = await response.json();
+          setUserData(data);
+        } else {
+          setUserData({
+            email: session.user.email,
+            name: session.user.name || 'Usuario',
+            image: session.user.image || '/placeholder-avatar.png'
+          });
+        }
+      }
+    }
+    fetchUserData();
+  }, [session]);
 
-
-export default async function PerfilPage() {
-  // Inicializar el cliente de Supabase del lado del servidor
-  const supabase = createServerActionClient<Database>({ cookies });
-
-  // Obtener la sesión del usuario
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // Si no hay usuario autenticado, redirigir a la página de autenticación
-  if (!user) {
-    redirect('/auth');
-  }
-
-  // Obtener datos adicionales del perfil del usuario desde la tabla 'users'
-  // Asumiendo que la tabla 'users' tiene los campos 'email' y 'role'
-  const { data: userProfile, error } = await supabase
-    .from('users')
-    .select('email, role') // Seleccionar los campos necesarios
-    .eq('id', user.id) // Filtrar por el ID del usuario autenticado
-    .single(); // Esperar un solo resultado
-
-  if (error) {
-    console.error('Error al obtener el perfil del usuario:', error);
-    // Manejar el error, mostrar un mensaje al usuario usando ErrorMessage
+  if (!session) {
     return (
-       <div className="container mx-auto p-4">
-          <ErrorMessage message="Error al cargar el perfil." />
-       </div>
+      <div className="container mx-auto py-12 text-center">
+        <p className="text-xl">Debes iniciar sesión para ver tu perfil.</p>
+        <Link href="/auth" className="text-sky-600 hover:underline">Iniciar sesión</Link>
+      </div>
     );
   }
 
-  // Si no se encuentra el perfil (aunque el usuario esté autenticado, lo cual sería inusual si la RLS está bien configurada)
-  if (!userProfile) {
-      // Esto podría indicar un problema con la RLS o la estructura de la base de datos
-      return (
-         <div className="container mx-auto p-4">
-            <ErrorMessage message="Perfil no encontrado." />
-         </div>
-      );
-  }
-
-
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Perfil del Usuario</h1>
-
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <div className="mb-4">
-          <p className="text-gray-600 text-sm">Email:</p>
-          <p className="text-gray-800 font-medium">{userProfile.email}</p>
+    <div className="container mx-auto px-4 py-8">
+      <div className="bg-white shadow rounded-lg p-6 md:p-8">
+        <div className="flex items-center space-x-6 mb-6">
+          <div className="relative w-24 h-24">
+            <Image
+              src={userData?.image || '/placeholder-avatar.png'}
+              alt={userData?.name || 'Avatar'}
+              fill
+              className="rounded-full object-cover"
+            />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">{userData?.name || 'Usuario'}</h1>
+            <p className="text-slate-600">{userData?.email}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-gray-600 text-sm">Rol:</p>
-          <p className="text-gray-800 font-medium">{userProfile.role}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Información Personal</h2>
+            <p className="text-slate-700">Aquí puedes actualizar tus datos personales.</p>
+            <Link href="/perfil/editar" className="mt-3 inline-block bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-4 rounded transition-colors">
+              Editar Perfil
+            </Link>
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Mis Favoritos</h2>
+            <p className="text-slate-700">Revisa y administra tus productos favoritos.</p>
+            <Link href="/favoritos" className="mt-3 inline-block bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-4 rounded transition-colors">
+              Ver Favoritos
+            </Link>
+          </div>
         </div>
-        {/* Aquí se podría añadir un formulario para editar el perfil en el futuro */}
-        {/* Por ahora, solo mostramos los datos */}
+        <div className="mt-8">
+          <button
+            onClick={() => signOut()}
+            className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded transition-colors"
+          >
+            Cerrar Sesión
+          </button>
+        </div>
       </div>
     </div>
   );

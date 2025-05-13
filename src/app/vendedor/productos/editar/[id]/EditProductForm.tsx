@@ -3,29 +3,33 @@
 import React, { useState, useEffect } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
-import { updateProduct } from '@/app/actions/products'; // Importar la Server Action para actualizar producto
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'; // Cliente de Supabase del lado del cliente
-import { useRouter } from 'next/navigation'; // Para redirigir después de actualizar el producto
-import { Product } from '@/app/actions/public'; // Importar el tipo Product
+import { updateProduct } from '@/app/actions/products';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
+import { Product, getUniqueCategories } from '@/app/actions/public'; // Importar Product y getUniqueCategories
+import type { ProductVariation, ProductVariationOption } from '@/app/actions/public'; // Importar tipos de variaciones
 
 // Definir un tipo para los datos del formulario de edición de producto
 interface EditProductFormData {
-  id: string; // Necesario para identificar el producto a actualizar
-  name: string;
-  slug: string;
-  price: number | null;
-  description: string;
-  mainImage: File | null; // Usaremos File para la subida de nueva imagen principal
-  mainImageUrl: string | null; // Para mostrar la imagen actual
-  galleryImages: FileList | null; // Usaremos FileList para la subida de nuevas imágenes de galería
-  galleryImageUrls: string[] | null; // Para mostrar las imágenes de galería actuales
-  whatsappLink: string;
-  category: string;
-  imagesToDelete: string[]; // URLs de imágenes de galería a eliminar
+  id?: string; // Hacer opcional
+  name?: string; // Hacer opcional
+  slug?: string; // Hacer opcional
+  price?: number | null; // Hacer opcional
+  description?: string; // Hacer opcional
+  mainImage: File | null;
+  mainImageUrl: string | null;
+  galleryImages: FileList | null;
+  galleryImageUrls: string[] | null;
+  whatsappLink?: string; // Hacer opcional
+  category_id?: string | null; // Hacer opcional
+  is_active?: boolean; // Hacer opcional
+  imagesToDelete: string[];
+  // Añadir variaciones al tipo de datos del formulario
+  variations: ProductVariation[];
 }
 
 interface EditProductFormProps {
-  initialData: Product; // Datos iniciales del producto a editar
+  initialData: Product;
 }
 
 export default function EditProductForm({ initialData }: EditProductFormProps) {
@@ -35,22 +39,35 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
     slug: initialData.slug,
     price: initialData.price,
     description: initialData.description,
-    mainImage: null, // No hay nueva imagen principal por defecto
-    mainImageUrl: initialData.main_image_url, // URL de la imagen principal existente
-    galleryImages: null, // No hay nuevas imágenes de galería por defecto
-    galleryImageUrls: initialData.gallery_image_urls, // URLs de las imágenes de galería existentes
+    mainImage: null,
+    // Asegurar que undefined se convierta a null para mainImageUrl y galleryImageUrls
+    mainImageUrl: initialData.main_image_url === undefined ? null : initialData.main_image_url,
+    galleryImages: null,
+    galleryImageUrls: initialData.gallery_image_urls === undefined ? null : initialData.gallery_image_urls,
     whatsappLink: initialData.whatsapp_link,
-    category: initialData.category || '', // Usar '' si la categoría es null
-    imagesToDelete: [], // Inicialmente no hay imágenes para eliminar
+    category_id: initialData.category_id || '', // Usar category_id
+    is_active: initialData.is_active === undefined ? true : initialData.is_active,
+    imagesToDelete: [],
+    // Inicializar variaciones desde initialData
+    variations: initialData.variations || [],
   });
+  const [categories, setCategories] = useState<{ id: string; name: string; }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const supabase = createClientComponentClient(); // Crear instancia del cliente del lado del cliente
+  const supabase = createClientComponentClient();
   const router = useRouter();
 
-  // Sincronizar initialData si cambia (aunque en este caso no debería cambiar en la misma página)
+  useEffect(() => {
+    async function fetchCategories() {
+      const fetchedCategories = await getUniqueCategories();
+      setCategories(fetchedCategories);
+    }
+    fetchCategories();
+  }, []);
+
+  // Sincronizar initialData si cambia
   useEffect(() => {
     setFormData({
       id: initialData.id,
@@ -59,19 +76,27 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
       price: initialData.price,
       description: initialData.description,
       mainImage: null,
-      mainImageUrl: initialData.main_image_url,
+      // Asegurar que undefined se convierta a null para mainImageUrl y galleryImageUrls
+      mainImageUrl: initialData.main_image_url === undefined ? null : initialData.main_image_url,
       galleryImages: null,
-      galleryImageUrls: initialData.gallery_image_urls,
+      galleryImageUrls: initialData.gallery_image_urls === undefined ? null : initialData.gallery_image_urls,
       whatsappLink: initialData.whatsapp_link,
-      category: initialData.category || '',
+      category_id: initialData.category_id || '', // Usar category_id
+      is_active: initialData.is_active === undefined ? true : initialData.is_active,
       imagesToDelete: [],
+      // Sincronizar variaciones
+      variations: initialData.variations || [],
     });
   }, [initialData]);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+      setFormData({ ...formData, [name]: (e.target as HTMLInputElement).checked });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,6 +150,59 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
     }
   };
 
+  // Funciones para manejar variaciones (copia de NewProductForm.tsx)
+  const handleAddVariation = () => {
+    setFormData(prev => ({
+      ...prev,
+      variations: [...prev.variations, { type: '', options: [{ name: '', stock: null, price: null }] }]
+    }));
+  };
+
+  const handleRemoveVariation = (indexToRemove: number) => {
+    setFormData(prev => ({
+      ...prev,
+      variations: prev.variations.filter((_: any, index: number) => index !== indexToRemove) // Añadir tipos explícitos
+    }));
+  };
+
+  const handleVariationTypeChange = (index: number, type: string) => {
+    setFormData(prev => {
+      const updatedVariations = [...prev.variations];
+      updatedVariations[index].type = type;
+      return { ...prev, variations: updatedVariations };
+    });
+  };
+
+  const handleAddVariationOption = (variationIndex: number) => {
+    setFormData(prev => {
+      const updatedVariations = [...prev.variations];
+      updatedVariations[variationIndex].options.push({ name: '', stock: null, price: null });
+      return { ...prev, variations: updatedVariations };
+    });
+  };
+
+  const handleRemoveVariationOption = (variationIndex: number, optionIndexToRemove: number) => {
+    setFormData(prev => {
+      const updatedVariations = [...prev.variations];
+      updatedVariations[variationIndex].options = updatedVariations[variationIndex].options.filter((_: any, index: number) => index !== optionIndexToRemove); // Añadir tipos explícitos
+      // Si se eliminan todas las opciones de una variación, eliminar también la variación
+      if (updatedVariations[variationIndex].options.length === 0) {
+        updatedVariations.splice(variationIndex, 1);
+      }
+      return { ...prev, variations: updatedVariations };
+    });
+  };
+
+  const handleVariationOptionChange = (variationIndex: number, optionIndex: number, field: keyof ProductVariationOption, value: string | number | null) => {
+    setFormData(prev => {
+      const updatedVariations = [...prev.variations];
+      // Asegurarse de que el valor numérico sea null si está vacío
+      const processedValue = (field === 'stock' || field === 'price') && value === null ? null : value;
+      (updatedVariations[variationIndex].options[optionIndex][field] as any) = processedValue; // Usar 'any' temporalmente para la asignación
+      return { ...prev, variations: updatedVariations };
+    });
+  };
+
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -141,9 +219,9 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
 
     // Validar que haya al menos una imagen principal (existente o nueva)
     if (!formData.mainImageUrl && !formData.mainImage) {
-       setError('Por favor, sube una imagen principal.');
-       setIsLoading(false);
-       return;
+      setError('Por favor, sube una imagen principal.');
+      setIsLoading(false);
+      return;
     }
 
 
@@ -156,15 +234,24 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
 
       // 2. Subir nueva imagen principal si se seleccionó una
       if (formData.mainImage) {
-        // Opcional: Eliminar la imagen principal anterior si existe y es diferente
-        if (formData.mainImageUrl && formData.mainImageUrl !== initialData.main_image_url) {
-             // Nota: Esto podría ser complicado si la URL anterior es la misma que la nueva por alguna razón.
-             // Una estrategia más segura podría ser eliminar la anterior solo si se sube una nueva.
-             // Por ahora, solo subimos la nueva y actualizamos la URL. La limpieza de la anterior
-             // podría manejarse con una función de limpieza de storage periódica o lógica más compleja.
+        const newMainImageUrl = await uploadImage(formData.mainImage, 'product-images', `${Date.now()}-${formData.mainImage.name}`);
+        // Si la subida de la nueva imagen principal fue exitosa y había una imagen principal anterior, eliminarla.
+        if (newMainImageUrl && initialData.main_image_url) {
+          // Solo eliminar si la URL es diferente para evitar problemas si se vuelve a subir la misma imagen conceptualmente
+          // aunque el timestamp en el nombre debería hacerlo diferente.
+          // La principal preocupación es no eliminar si la subida de la nueva falló (ya cubierto por el await anterior).
+          if (initialData.main_image_url !== newMainImageUrl) { // Comprobación extra, aunque el nombre de archivo debería ser único
+            await deleteImages([initialData.main_image_url]);
+          }
         }
-        updatedMainImageUrl = await uploadImage(formData.mainImage, 'product-images', `${Date.now()}-${formData.mainImage.name}`);
+        updatedMainImageUrl = newMainImageUrl;
+      } else if (formData.mainImageUrl === null && initialData.main_image_url) {
+        // Si mainImageUrl se puso a null (ej. un botón "Eliminar Imagen Principal" que no existe aún, pero por si acaso)
+        // y había una imagen inicial, la eliminamos.
+        await deleteImages([initialData.main_image_url]);
+        updatedMainImageUrl = null; // Asegurarse de que se guarda como null en la DB
       }
+
 
       // 3. Subir nuevas imágenes de galería si se seleccionaron
       if (formData.galleryImages) {
@@ -175,6 +262,21 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
         }
       }
 
+      // Preparar datos de variaciones para la Server Action
+      // Asegurarse de que las variaciones y opciones tengan al menos un nombre
+      const validVariations = formData.variations
+        .filter(v => v.type.trim() !== '')
+        .map(v => ({
+          type: v.type.trim(),
+          options: v.options.filter((o: ProductVariationOption) => o.name.trim() !== '').map((o: ProductVariationOption) => ({ // Añadir tipos explícitos
+            name: o.name.trim(),
+            stock: o.stock,
+            price: o.price,
+          })),
+        }))
+        .filter(v => v.options.length > 0); // Solo incluir variaciones con opciones válidas
+
+
       // Preparar datos para la Server Action de actualización
       const productDataToUpdate = {
         name: formData.name,
@@ -184,10 +286,19 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
         main_image_url: updatedMainImageUrl,
         gallery_image_urls: updatedGalleryImageUrls.length > 0 ? updatedGalleryImageUrls : null,
         whatsapp_link: formData.whatsappLink,
-        category: formData.category || null,
+        category_id: formData.category_id || null, // Enviar category_id
+        is_active: formData.is_active,
+        // Incluir variaciones en los datos a actualizar
+        variations: validVariations.length > 0 ? validVariations : null,
       };
 
       // Llamar a la Server Action para actualizar el producto
+      // Asegurarse de que formData.id no sea undefined antes de pasarlo
+      if (!formData.id) {
+        setError('Error interno: ID de producto no disponible para actualizar.');
+        setIsLoading(false);
+        return;
+      }
       const result = await updateProduct(formData.id, productDataToUpdate);
 
       if (!result.success) {
@@ -228,7 +339,7 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
           type="text"
           id="name"
           name="name"
-          value={formData.name}
+          value={formData.name || ''} // Usar || '' para manejar undefined
           onChange={handleInputChange}
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           required
@@ -243,7 +354,7 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
           type="text"
           id="slug"
           name="slug"
-          value={formData.slug}
+          value={formData.slug || ''} // Usar || '' para manejar undefined
           onChange={handleInputChange}
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           required
@@ -258,7 +369,7 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
           type="number"
           id="price"
           name="price"
-          value={formData.price || ''} // Usar '' para evitar 0 en input vacío
+          value={formData.price || ''} // Usar || '' para evitar 0 en input vacío y manejar undefined
           onChange={handleInputChange}
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           step="0.01"
@@ -272,7 +383,7 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
         <textarea
           id="description"
           name="description"
-          value={formData.description}
+          value={formData.description || ''} // Usar || '' para manejar undefined
           onChange={handleInputChange}
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline h-32"
           required
@@ -298,10 +409,10 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           accept="image/*"
         />
-         {/* Mostrar mensaje si se requiere imagen principal y no hay ni URL ni archivo */}
-         {!formData.mainImageUrl && !formData.mainImage && (
-             <p className="text-red-500 text-xs italic mt-1">Se requiere una imagen principal.</p>
-         )}
+        {/* Mostrar mensaje si se requiere imagen principal y no hay ni URL ni archivo */}
+        {!formData.mainImageUrl && !formData.mainImage && (
+          <p className="text-red-500 text-xs italic mt-1">Se requiere una imagen principal.</p>
+        )}
       </div>
 
       {/* Campo para Galería de Imágenes */}
@@ -340,6 +451,80 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
         />
       </div>
 
+      {/* Sección para Variaciones (copia de NewProductForm.tsx) */}
+      <div className="mb-6 border-t pt-4 mt-4">
+        <h3 className="text-lg font-bold mb-4 text-gray-800">Variaciones (Opcional)</h3>
+        {formData.variations.map((variation, varIndex) => (
+          <div key={varIndex} className="mb-4 p-4 border rounded-lg bg-gray-50">
+            <div className="flex justify-between items-center mb-3">
+              <input
+                type="text"
+                placeholder="Tipo de Variación (Ej: Color, Talla)"
+                value={variation.type}
+                onChange={(e) => handleVariationTypeChange(varIndex, e.target.value)}
+                className="shadow appearance-none border rounded py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline flex-grow mr-2"
+              />
+              <button
+                type="button"
+                onClick={() => handleRemoveVariation(varIndex)}
+                className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
+              >
+                Eliminar Variación
+              </button>
+            </div>
+            <h4 className="font-semibold mb-2 text-gray-700">Opciones:</h4>
+            {variation.options.map((option, optIndex) => (
+              <div key={optIndex} className="flex items-center mb-2 pl-4">
+                <input
+                  type="text"
+                  placeholder="Nombre Opción (Ej: Rojo, S)"
+                  value={option.name}
+                  onChange={(e) => handleVariationOptionChange(varIndex, optIndex, 'name', e.target.value)}
+                  className="shadow appearance-none border rounded py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline w-1/3 mr-2 text-sm"
+                />
+                <input
+                  type="number"
+                  placeholder="Stock"
+                  value={option.stock || ''}
+                  onChange={(e) => handleVariationOptionChange(varIndex, optIndex, 'stock', parseInt(e.target.value) || null)}
+                  className="shadow appearance-none border rounded py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline w-1/4 mr-2 text-sm"
+                  min="0"
+                />
+                <input
+                  type="number"
+                  placeholder="Precio (Opcional)"
+                  value={option.price || ''}
+                  onChange={(e) => handleVariationOptionChange(varIndex, optIndex, 'price', parseFloat(e.target.value) || null)}
+                  className="shadow appearance-none border rounded py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline w-1/4 mr-2 text-sm"
+                  step="0.01"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveVariationOption(varIndex, optIndex)}
+                  className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => handleAddVariationOption(varIndex)}
+              className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-sm mt-2 ml-4"
+            >
+              Añadir Opción
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={handleAddVariation}
+          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        >
+          Añadir Variación
+        </button>
+      </div>
+
 
       <div className="mb-4">
         <label htmlFor="whatsappLink" className="block text-gray-700 text-sm font-bold mb-2">
@@ -349,7 +534,7 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
           type="text"
           id="whatsappLink"
           name="whatsappLink"
-          value={formData.whatsappLink}
+          value={formData.whatsappLink || ''} // Usar || '' para manejar undefined
           onChange={handleInputChange}
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           placeholder="Ej: https://wa.me/tunumero?text=Hola"
@@ -357,18 +542,38 @@ export default function EditProductForm({ initialData }: EditProductFormProps) {
         />
       </div>
 
-       <div className="mb-4">
-        <label htmlFor="category" className="block text-gray-700 text-sm font-bold mb-2">
-          Categoría (Opcional):
+      <div className="mb-4">
+        <label htmlFor="category_id" className="block text-gray-700 text-sm font-bold mb-2">
+          Categoría:
         </label>
-        <input
-          type="text"
-          id="category"
-          name="category"
-          value={formData.category}
+        <select
+          id="category_id"
+          name="category_id"
+          value={formData.category_id || ''} // Usar || '' para manejar null/undefined
           onChange={handleInputChange}
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-        />
+        >
+          <option value="">Selecciona una categoría</option>
+          {categories.map(cat => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="is_active" className="flex items-center text-gray-700 text-sm font-bold">
+          <input
+            type="checkbox"
+            id="is_active"
+            name="is_active"
+            checked={formData.is_active ?? true} // Usar ?? true para manejar undefined
+            onChange={handleInputChange}
+            className="mr-2 leading-tight"
+          />
+          <span className="text-sm">Producto Activo (visible para compradores)</span>
+        </label>
       </div>
 
 
