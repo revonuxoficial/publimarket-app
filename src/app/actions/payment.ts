@@ -126,5 +126,14 @@ export async function updateUserToPro(userId: string) {
   }
 
   console.log(`Vendedor ${vendor.id} (usuario ${userId}) actualizado a PRO.`);
+
+  // TODO: Enviar correo electrónico de confirmación de suscripción PRO.
+  // Esto debería hacerse a través de una Edge Function o un backend seguro
+  // para interactuar con un servicio de envío de correos (ej. Resend, SendGrid).
+  // Se necesitaría obtener el email del usuario (posiblemente de auth.users)
+  // y usar una plantilla de correo adecuada.
+  // Ejemplo (pseudocódigo):
+  // await sendSubscriptionConfirmationEmail(userEmail, PRO_SUBSCRIPTION_TITLE);
+
   return { success: true };
 }

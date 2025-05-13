@@ -121,6 +121,43 @@ export async function updateUserRole(userId: string, newRole: string): Promise<{
   return { success: true };
 }
 
+/**
+ * Bloquea o desbloquea un usuario a través de una Edge Function segura.
+ * Solo para administradores.
+ * @param userId - El ID del usuario (auth.users.id).
+ * @param block - Booleano que indica si se debe bloquear (true) o desbloquear (false).
+ */
+export async function blockUnblockUser(userId: string, block: boolean): Promise<{ success: boolean; error?: string }> {
+  await checkAdmin();
+
+  try {
+    // Llama a la Edge Function para bloquear/desbloquear el usuario
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/block-unblock-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.EDGE_FUNCTION_SECRET}`, // Usa un secreto para autorizar la llamada
+      },
+      body: JSON.stringify({ userId, block }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error calling Edge Function:', result.error);
+      return { success: false, error: result.error || 'Error al actualizar el estado del usuario.' };
+    }
+
+    revalidatePath('/admin/usuarios');
+    return { success: true };
+
+  } catch (error: any) {
+    console.error('Error in blockUnblockUser Server Action:', error);
+    return { success: false, error: error.message || 'Ocurrió un error inesperado.' };
+  }
+}
+
+
 // Funciones para suspender/eliminar usuarios requerirían llamadas a Supabase Admin API
 // y deberían hacerse desde un backend seguro o Edge Function, no directamente desde Server Actions
 // expuestas al cliente, incluso con checkAdmin, por la sensibilidad de la operación.

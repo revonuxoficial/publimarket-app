@@ -4,6 +4,7 @@ import Link from 'next/link';
 import ErrorMessage from '@/components/ErrorMessage';
 import PaginationControls from '@/components/PaginationControls';
 import UserRoleChanger from './UserRoleChanger'; // Importar el componente
+import BlockUnblockUserButton from './BlockUnblockUserButton'; // Importar el nuevo componente
 
 export const metadata = {
   title: 'Gestión de Usuarios - Admin PubliMarket',
@@ -111,8 +112,9 @@ export default async function AdminUsuariosPage({ searchParams }: AdminUsuariosP
                       {new Date(user.created_at).toLocaleDateString('es-AR')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      {/* Otras acciones como suspender/eliminar podrían ir aquí */}
-                      {/* <button className="text-red-600 hover:text-red-800">Suspender (placeholder)</button> */}
+                      {/* TODO: Obtener el estado de bloqueo real del usuario */}
+                      <BlockUnblockUserButton userId={user.id} isBlocked={false} /> {/* Placeholder isBlocked */}
+                      {/* Otras acciones como eliminar (con confirmación) podrían ir aquí */}
                     </td>
                   </tr>
                 ))}

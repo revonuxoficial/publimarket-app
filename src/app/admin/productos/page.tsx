@@ -6,6 +6,8 @@ import Image from 'next/image';
 import ErrorMessage from '@/components/ErrorMessage';
 import PaginationControls from '@/components/PaginationControls';
 import ProductStatusToggleButtonAdmin from './ProductStatusToggleButtonAdmin'; // Nuevo componente
+import DeleteProductButtonAdmin from './DeleteProductButtonAdmin'; // Importar el nuevo componente
+import FeatureProductButtonAdmin from './FeatureProductButtonAdmin'; // Importar el nuevo componente
 
 export const metadata = {
   title: 'Gestión de Productos - Admin PubliMarket',
@@ -101,6 +103,7 @@ export default async function AdminProductosPage({ searchParams }: AdminProducto
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Categoría</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Precio</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Destacado</th> {/* Nueva columna */}
                   <th className="px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
@@ -132,9 +135,13 @@ export default async function AdminProductosPage({ searchParams }: AdminProducto
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <ProductStatusToggleButtonAdmin productId={product.id} initialIsActive={product.is_active} />
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm"> {/* Columna para Destacado */}
+                      <FeatureProductButtonAdmin productId={product.id} initialIsFeatured={product.is_featured} />
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
                       <Link href={`/producto/${product.slug}`} target="_blank" className="text-sky-600 hover:text-sky-700">Ver</Link>
-                      {/* <Link href={`/admin/productos/editar/${product.id}`} className="text-indigo-600 hover:text-indigo-800">Editar</Link> */}
+                      <Link href={`/admin/productos/editar/${product.id}`} className="text-indigo-600 hover:text-indigo-800">Editar</Link>
+                      <DeleteProductButtonAdmin productId={product.id} productName={product.name} />
                     </td>
                   </tr>
                 ))}
